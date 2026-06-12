@@ -655,6 +655,7 @@ footer {
   var video   = document.getElementById('heroVideo');
   var fade    = document.getElementById('heroFade');
   var content = document.getElementById('heroContent');
+  var cue     = document.querySelector('.hero-cue');
   var nav     = document.getElementById('nav');
 
   var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -690,6 +691,15 @@ footer {
     var exit = clamp01(p / 0.28);
     content.style.opacity = 1 - exit;
     content.style.transform = 'translateY(' + (exit * -60) + 'px)';
+
+    // Scroll cue dies quickly once the journey begins. Its intro
+    // animation holds opacity with fill-mode:forwards, which beats
+    // inline styles — hence the !important override while scrolled.
+    if (p > 0.02) {
+      cue.style.setProperty('opacity', String(1 - clamp01(p / 0.15)), 'important');
+    } else {
+      cue.style.removeProperty('opacity');
+    }
 
     // Nav treatment switches once the film is mostly gone
     nav.classList.toggle('is-solid', p > FADE_START);
