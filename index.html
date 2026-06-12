@@ -639,18 +639,17 @@ footer {
 
   /* ------------------------------------------------------------
      Scroll-driven video hero
-     SCRUB mode (default): scroll position drives video time, with
-     a lerp so playback glides instead of stepping.
-     Set SCRUB = false for autoplay-loop + scroll fade instead —
-     this is also the automatic fallback on touch devices, where
-     seeking is unreliable.
+     Scroll position is the film's only transport: progress 0→1
+     across the pinned section maps frame 0 → final frame, with a
+     lerp so playback glides instead of stepping. The video never
+     plays on its own. The clip completes at SCRUB_END so every
+     frame has been shown before the section releases.
      ------------------------------------------------------------ */
 
-  var SCRUB = true;
-  var SCRUB_END  = 0.78;  // hero progress at which the film reaches its last frame
-  var FADE_START = 0.60;  // hero progress at which the dissolve to black begins
-  var FADE_END   = 0.96;  // fully black just before the statement settles
-  var LERP       = 0.11;  // smoothing factor for scrubbed time
+  var SCRUB_END  = 0.85;  // progress at which the film reaches its final frame
+  var FADE_START = 0.68;  // progress at which the dissolve to black begins
+  var FADE_END   = 0.97;  // fully black just before the statement settles
+  var LERP       = 0.12;  // smoothing factor for scrubbed time
 
   var track   = document.getElementById('heroTrack');
   var video   = document.getElementById('heroVideo');
@@ -659,8 +658,7 @@ footer {
   var nav     = document.getElementById('nav');
 
   var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var isTouch = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-  var scrubbing = SCRUB && !isTouch && !reduceMotion;
+  var scrubbing = !reduceMotion;
 
   var duration = 0;
   var targetTime = 0;
@@ -711,23 +709,29 @@ footer {
     if (rafId === null) { rafId = requestAnimationFrame(tick); }
   }
 
-  video.addEventListener('loadedmetadata', function () {
+  function adoptDuration() {
     duration = video.duration || 0;
-    if (scrubbing) {
+    if (scrubbing && duration > 0) {
       video.pause();
       applyScrollState();
     }
+  }
+
+  // Metadata may already be cached by the time this script runs,
+  // in which case loadedmetadata never fires — adopt it directly.
+  if (video.readyState >= 1) { adoptDuration(); }
+  video.addEventListener('loadedmetadata', adoptDuration);
+
+  // The film never plays itself; if anything starts it, stop it.
+  video.autoplay = false;
+  video.pause();
+  video.addEventListener('play', function () {
+    if (scrubbing) { video.pause(); }
   });
 
   if (reduceMotion) {
     // Static first frame, no scrub, no fade choreography
-    video.removeAttribute('autoplay');
     fade.style.opacity = 0;
-  } else if (!scrubbing) {
-    // Touch fallback: let the film play itself; scroll still drives the fade
-    video.loop = true;
-    var p = video.play();
-    if (p && p.catch) { p.catch(function () { /* poster remains */ }); }
   }
 
   window.addEventListener('scroll', applyScrollState, { passive: true });
