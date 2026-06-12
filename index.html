@@ -226,12 +226,15 @@ h1.hero-reveal           { animation-delay: 0.65s; }
 }
 
 /* Scroll cue: thin gold line that breathes */
+/* Centred with left/right:0 rather than a translateX(-50%),
+   because the heroRise animation overwrites the transform. */
 .hero-cue {
   position: absolute;
   bottom: 42px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   z-index: 4;
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   align-items: center;
