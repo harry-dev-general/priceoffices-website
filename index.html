@@ -367,6 +367,63 @@ section { position: relative; }
   margin-bottom: 26px;
 }
 
+/* ---------- Scene 2: scroll-scrubbed video behind the lower sections ---------- */
+
+/* The video lives in a sticky layer that stays pinned while the
+   portfolio, philosophy and contact sections scroll over it. The
+   negative margin pulls that content up to overlap the sticky bg
+   (a containing-block sticky-background pattern). */
+.scene2 {
+  position: relative;
+  background: var(--ink);
+}
+
+.scene2-bg {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  margin-bottom: -100vh;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.scene2-video,
+.scene2-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scene2-poster { z-index: 0; }
+.scene2-video  { z-index: 1; }
+
+/* Readability scrim so white/gold type holds over the footage */
+.scene2-grade {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(7,9,28,0.82) 0%, rgba(7,9,28,0.5) 20%,
+                            rgba(7,9,28,0.5) 78%, rgba(7,9,28,0.86) 100%),
+    rgba(7, 9, 28, 0.28);
+}
+
+/* Starts opaque black; scroll fades it out from the portfolio on */
+.scene2-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: var(--ink);
+  opacity: 1;
+  pointer-events: none;
+}
+
+.scene2-content { position: relative; z-index: 1; }
+
 /* ---------- Portfolio: numbered editorial rows ---------- */
 
 .portfolio { padding: 16vh 0; }
@@ -426,8 +483,12 @@ section { position: relative; }
 
 /* ---------- Philosophy band ---------- */
 
+/* Frosted band so the quote reads as a distinct panel while the
+   harbour footage still moves softly behind it */
 .philosophy {
-  background: var(--ink-soft);
+  background: rgba(7, 9, 28, 0.34);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
   border-top: 1px solid var(--hairline);
   border-bottom: 1px solid var(--hairline);
   padding: 18vh 0;
@@ -646,6 +707,20 @@ footer {
   </div>
 </section>
 
+<!-- ===================== Scene 2: video behind lower sections ===================== -->
+<div class="scene2" id="scene2">
+  <div class="scene2-bg" aria-hidden="true">
+    <img class="scene2-poster" src="assets/sydney-harbour-poster-2.jpg" alt="">
+    <video class="scene2-video" id="scene2Video"
+           src="assets/sydney-harbour-hero-2.mp4"
+           poster="assets/sydney-harbour-poster-2.jpg"
+           muted playsinline preload="auto"
+           aria-label="Sydney Harbour at night"></video>
+    <div class="scene2-grade"></div>
+    <div class="scene2-fade" id="scene2Fade"></div>
+  </div>
+  <div class="scene2-content">
+
 <!-- ===================== Portfolio ===================== -->
 <section class="portfolio" id="portfolio">
   <div class="shell">
@@ -699,6 +774,9 @@ footer {
     <a class="button" data-reveal="fade" href="https://www.priceoffices.com/contact">Contact Us</a>
   </div>
 </section>
+
+  </div><!-- /.scene2-content -->
+</div><!-- /.scene2 -->
 
 <!-- ===================== Footer ===================== -->
 <footer>
@@ -858,6 +936,12 @@ footer {
   var cue     = document.querySelector('.hero-cue');
   var nav     = document.getElementById('nav');
 
+  // Scene 2: the video that scrubs behind the lower sections
+  var SCRUB2_END = 0.90;  // scene2 progress at which video 2 reaches its last frame
+  var scene2     = document.getElementById('scene2');
+  var video2     = document.getElementById('scene2Video');
+  var fade2      = document.getElementById('scene2Fade');
+
   var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var scrubbing = !reduceMotion;
 
@@ -866,6 +950,11 @@ footer {
   var currentTime = 0;
   var heroActive = true;
   var rafId = null;
+
+  var duration2 = 0;
+  var targetTime2 = 0;
+  var currentTime2 = 0;
+  var scene2Active = false;
 
   function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
@@ -903,6 +992,29 @@ footer {
 
     // Nav treatment switches once the film is mostly gone
     nav.classList.toggle('is-solid', p > FADE_START);
+
+    applyScene2State();
+  }
+
+  /* Scene 2: black fades out as the portfolio rises into view, then
+     scroll scrubs video 2 from its first frame through to its last. */
+  function applyScene2State() {
+    if (!scene2) { return; }
+    var rect = scene2.getBoundingClientRect();
+    var vh = window.innerHeight;
+
+    // Fade the black cover out as the section enters from the bottom:
+    // opaque until the top is ~90% down the viewport, clear by ~38%.
+    var fadeIn = clamp01((vh * 0.9 - rect.top) / (vh * 0.9 - vh * 0.38));
+    if (reduceMotion) { fadeIn = 1; }
+    fade2.style.opacity = String(1 - fadeIn);
+
+    // Scrub progress runs across the pinned span of the scene
+    var total = rect.height - vh;
+    var p2 = total > 0 ? clamp01(-rect.top / total) : 0;
+    if (duration2 > 0) {
+      targetTime2 = clamp01(p2 / SCRUB2_END) * (duration2 - 0.05);
+    }
   }
 
   function tick() {
@@ -912,7 +1024,13 @@ footer {
         try { video.currentTime = currentTime; } catch (e) { /* not seekable yet */ }
       }
     }
-    rafId = heroActive ? requestAnimationFrame(tick) : null;
+    if (scrubbing && duration2 > 0) {
+      currentTime2 += (targetTime2 - currentTime2) * LERP;
+      if (Math.abs(targetTime2 - currentTime2) > 0.001) {
+        try { video2.currentTime = currentTime2; } catch (e) { /* not seekable yet */ }
+      }
+    }
+    rafId = (heroActive || scene2Active) ? requestAnimationFrame(tick) : null;
   }
 
   function startLoop() {
@@ -927,10 +1045,28 @@ footer {
     }
   }
 
+  function adoptDuration2() {
+    duration2 = video2 ? (video2.duration || 0) : 0;
+    if (scrubbing && duration2 > 0) {
+      video2.pause();
+      applyScene2State();
+    }
+  }
+
   // Metadata may already be cached by the time this script runs,
   // in which case loadedmetadata never fires — adopt it directly.
   if (video.readyState >= 1) { adoptDuration(); }
   video.addEventListener('loadedmetadata', adoptDuration);
+
+  if (video2) {
+    if (video2.readyState >= 1) { adoptDuration2(); }
+    video2.addEventListener('loadedmetadata', adoptDuration2);
+    video2.autoplay = false;
+    video2.pause();
+    video2.addEventListener('play', function () {
+      if (scrubbing) { video2.pause(); }
+    });
+  }
 
   // The film never plays itself; if anything starts it, stop it.
   video.autoplay = false;
@@ -940,8 +1076,9 @@ footer {
   });
 
   if (reduceMotion) {
-    // Static first frame, no scrub, no fade choreography
+    // Static first frames, no scrub, no fade choreography
     fade.style.opacity = 0;
+    if (fade2) { fade2.style.opacity = 0; }
   }
 
   window.addEventListener('scroll', applyScrollState, { passive: true });
@@ -949,11 +1086,18 @@ footer {
   applyScrollState();
   if (!reduceMotion) { startLoop(); }
 
-  /* Park the rAF loop while the hero is off-screen */
+  /* Park the rAF loop while both video scenes are off-screen */
   new IntersectionObserver(function (entries) {
     heroActive = entries[0].isIntersecting;
     if (heroActive && !reduceMotion) { startLoop(); }
   }).observe(track);
+
+  if (scene2) {
+    new IntersectionObserver(function (entries) {
+      scene2Active = entries[0].isIntersecting;
+      if (scene2Active && !reduceMotion) { startLoop(); }
+    }).observe(scene2);
+  }
 
 })();
 
