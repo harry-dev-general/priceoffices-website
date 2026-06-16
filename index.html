@@ -581,6 +581,86 @@ section { position: relative; }
 .button:hover { color: var(--ink); }
 .button:hover::before { transform: translateY(0); }
 
+/* Make a <button> wear the .button look */
+button.button {
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--body);
+}
+button.button:disabled { opacity: 0.5; cursor: default; }
+button.button:disabled::before { transform: translateY(101%); }
+
+/* ---------- Contact form ---------- */
+
+.contact-form {
+  max-width: 540px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.contact-form .field { margin-bottom: 30px; }
+
+.contact-form label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--mist);
+  margin-bottom: 12px;
+}
+
+.contact-form input,
+.contact-form textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--hairline);
+  padding: 10px 0;
+  color: var(--white);
+  font-family: var(--body);
+  font-weight: 300;
+  font-size: 16px;
+  letter-spacing: 0.01em;
+  transition: border-color 0.4s ease;
+}
+
+.contact-form textarea { resize: vertical; min-height: 110px; line-height: 1.6; }
+
+.contact-form input::placeholder,
+.contact-form textarea::placeholder { color: rgba(244, 243, 238, 0.32); }
+
+.contact-form input:focus,
+.contact-form textarea:focus { outline: none; border-bottom-color: var(--gold); }
+
+/* Honeypot — hidden from people, tempting to bots */
+.contact-form .hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.contact-actions {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 8px;
+}
+
+.contact-form button.button { border-width: 1px; }
+
+.form-status {
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.form-status.is-visible { opacity: 1; }
+.form-status.is-ok { color: var(--gold); }
+.form-status.is-error { color: #e07a6a; }
+
 /* ---------- Footer ---------- */
 
 /* Solid, raised above any background layer so it always paints
@@ -795,7 +875,30 @@ footer {
     <p class="kicker" data-reveal="kicker">Contact</p>
     <h2 data-reveal="words">Get in touch</h2>
     <p data-reveal="fade">Discover how Price Offices can help you achieve your investment and property goals.</p>
-    <a class="button" data-reveal="fade" href="https://www.priceoffices.com/contact">Contact Us</a>
+
+    <form class="contact-form" id="contactForm" data-reveal="fade" novalidate>
+      <div class="field">
+        <label for="cf-name">Name</label>
+        <input type="text" id="cf-name" name="name" autocomplete="name" maxlength="120" required placeholder="Your name">
+      </div>
+      <div class="field">
+        <label for="cf-email">Email</label>
+        <input type="email" id="cf-email" name="email" autocomplete="email" maxlength="200" required placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label for="cf-message">Message</label>
+        <textarea id="cf-message" name="message" maxlength="4000" required placeholder="How can we help?"></textarea>
+      </div>
+      <!-- honeypot: must stay empty -->
+      <div class="hp" aria-hidden="true">
+        <label for="cf-company">Company</label>
+        <input type="text" id="cf-company" name="company" tabindex="-1" autocomplete="off">
+      </div>
+      <div class="contact-actions">
+        <button type="submit" class="button">Send message</button>
+        <p class="form-status" id="formStatus" role="status" aria-live="polite"></p>
+      </div>
+    </form>
   </div>
 </section>
 
@@ -1264,6 +1367,67 @@ footer {
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () { ScrollTrigger.refresh(); });
   }
+})();
+
+/* ------------------------------------------------------------
+   Contact form — posts to the self-hosted /api/contact endpoint
+   ------------------------------------------------------------ */
+(function () {
+  'use strict';
+
+  var form = document.getElementById('contactForm');
+  if (!form) { return; }
+
+  var btn = form.querySelector('button[type="submit"]');
+  var status = document.getElementById('formStatus');
+  var btnLabel = btn.textContent;
+
+  function setStatus(msg, kind) {
+    status.textContent = msg;
+    status.className = 'form-status is-visible ' + (kind === 'ok' ? 'is-ok' : 'is-error');
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    var payload = {
+      name: form.name.value,
+      email: form.email.value,
+      message: form.message.value,
+      company: form.company.value // honeypot
+    };
+
+    if (!payload.name.trim() || !payload.email.trim() || !payload.message.trim()) {
+      setStatus('Please fill in every field.', 'error');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    status.className = 'form-status';
+
+    fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (res.ok && res.d && res.d.ok) {
+          form.reset();
+          setStatus('Thanks — your message is on its way.', 'ok');
+        } else {
+          setStatus((res.d && res.d.error) || 'Something went wrong. Please try again.', 'error');
+        }
+      })
+      .catch(function () {
+        setStatus('Network error. Please try again.', 'error');
+      })
+      .then(function () {
+        btn.disabled = false;
+        btn.textContent = btnLabel;
+      });
+  });
 })();
 </script>
 
