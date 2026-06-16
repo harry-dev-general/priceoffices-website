@@ -369,23 +369,28 @@ section { position: relative; }
 
 /* ---------- Scene 2: scroll-scrubbed video behind the lower sections ---------- */
 
-/* The video lives in a sticky layer that stays pinned while the
-   portfolio, philosophy and contact sections scroll over it. The
-   negative margin pulls that content up to overlap the sticky bg
-   (a containing-block sticky-background pattern). */
+/* The video sits in a FIXED, full-viewport layer behind the lower
+   sections — out of document flow, so it can never disturb the
+   footer below. It is only shown (is-active) while the scene is on
+   screen; the content sections scroll over it at a higher z-index. */
 .scene2 {
   position: relative;
   background: var(--ink);
 }
 
 .scene2-bg {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  height: 100svh;
-  margin-bottom: -100vh;
-  overflow: hidden;
+  position: fixed;
+  inset: 0;
   z-index: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.scene2-bg.is-active {
+  opacity: 1;
+  visibility: visible;
 }
 
 .scene2-video,
@@ -400,16 +405,18 @@ section { position: relative; }
 .scene2-poster { z-index: 0; }
 .scene2-video  { z-index: 1; }
 
-/* Readability scrim so white/gold type holds over the footage */
+/* Readability scrim so white/gold type holds over the footage.
+   A flat base plus a stronger vertical gradient keeps contrast
+   high even on the bright water highlights. */
 .scene2-grade {
   position: absolute;
   inset: 0;
   z-index: 2;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(7,9,28,0.82) 0%, rgba(7,9,28,0.5) 20%,
-                            rgba(7,9,28,0.5) 78%, rgba(7,9,28,0.86) 100%),
-    rgba(7, 9, 28, 0.28);
+    linear-gradient(180deg, rgba(7,9,28,0.9) 0%, rgba(7,9,28,0.62) 22%,
+                            rgba(7,9,28,0.62) 76%, rgba(7,9,28,0.92) 100%),
+    rgba(7, 9, 28, 0.45);
 }
 
 /* Starts opaque black; scroll fades it out from the portfolio on */
@@ -423,6 +430,16 @@ section { position: relative; }
 }
 
 .scene2-content { position: relative; z-index: 1; }
+
+/* Soft shadow under all scene-2 type lifts it off the moving water */
+.scene2-content h2,
+.scene2-content h3,
+.scene2-content p,
+.scene2-content blockquote,
+.scene2-content cite,
+.scene2-content .kicker {
+  text-shadow: 0 1px 26px rgba(7, 9, 28, 0.6);
+}
 
 /* ---------- Portfolio: numbered editorial rows ---------- */
 
@@ -566,7 +583,12 @@ section { position: relative; }
 
 /* ---------- Footer ---------- */
 
+/* Solid, raised above any background layer so it always paints
+   on its own ink — the ABN and company name stay legible. */
 footer {
+  position: relative;
+  z-index: 2;
+  background: var(--ink);
   border-top: 1px solid var(--hairline);
   padding: 72px 48px 56px;
   text-align: center;
@@ -576,11 +598,13 @@ footer {
 .footer-mark svg { width: 100%; height: auto; }
 
 .footer-meta {
-  color: rgba(244, 243, 238, 0.4);
+  color: rgba(244, 243, 238, 0.66);
   font-size: 12.5px;
   letter-spacing: 0.06em;
   line-height: 2;
 }
+
+.footer-meta p:first-child { color: rgba(244, 243, 238, 0.82); }
 
 /* ---------- Responsive ---------- */
 
@@ -939,6 +963,7 @@ footer {
   // Scene 2: the video that scrubs behind the lower sections
   var SCRUB2_END = 0.90;  // scene2 progress at which video 2 reaches its last frame
   var scene2     = document.getElementById('scene2');
+  var scene2Bg   = document.querySelector('.scene2-bg');
   var video2     = document.getElementById('scene2Video');
   var fade2      = document.getElementById('scene2Fade');
 
@@ -1095,6 +1120,9 @@ footer {
   if (scene2) {
     new IntersectionObserver(function (entries) {
       scene2Active = entries[0].isIntersecting;
+      // Only paint the fixed video layer while the scene is on screen,
+      // so the footer (and hero) sit on clean solid ink.
+      if (scene2Bg) { scene2Bg.classList.toggle('is-active', scene2Active); }
       if (scene2Active && !reduceMotion) { startLoop(); }
     }).observe(scene2);
   }
